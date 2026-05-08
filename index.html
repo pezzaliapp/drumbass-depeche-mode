@@ -3,20 +3,87 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OFFICIUM — drumbass depeche mode</title>
+  <title>OFFICIUM &middot; drumbass depeche mode</title>
   <meta name="description" content="OFFICIUM. Una macchina da liturgia industriale. Sintesi sottrattiva, ritmica drum &amp; bass, voci di metallo e cattedrale.">
   <meta name="theme-color" content="#050505">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&amp;family=IBM+Plex+Mono:wght@400;500&amp;family=Inter:wght@300;400;500&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main id="stage">
-    <div id="boot">
+
+    <header class="hud hud-top">
+      <span class="hud-cell hud-mark">OFFICIUM</span>
+      <span class="hud-cell hud-dim" id="hud-clock">MMXXVI</span>
+    </header>
+
+    <section class="rota-wrap" aria-label="rota">
+      <canvas id="rota" aria-hidden="true"></canvas>
+      <div class="rota-center">
+        <div id="word" data-word="LUX">LUX</div>
+        <div id="word-trans" class="word-trans">luce</div>
+      </div>
+    </section>
+
+    <aside class="voci" aria-label="voci">
+      <button class="voce is-active" data-voce="KICK">
+        <span class="voce-dot"></span>
+        <span class="voce-name">KICK</span>
+        <kbd>Q</kbd>
+      </button>
+      <button class="voce is-active" data-voce="PERC">
+        <span class="voce-dot"></span>
+        <span class="voce-name">PERC</span>
+        <kbd>W</kbd>
+      </button>
+      <button class="voce is-active" data-voce="BASSO">
+        <span class="voce-dot"></span>
+        <span class="voce-name">BASSO</span>
+        <kbd>E</kbd>
+      </button>
+      <button class="voce" data-voce="FERRUM">
+        <span class="voce-dot"></span>
+        <span class="voce-name">FERRUM</span>
+        <kbd>R</kbd>
+      </button>
+      <button class="voce is-active" data-voce="CAMPANA">
+        <span class="voce-dot"></span>
+        <span class="voce-name">CAMPANA</span>
+        <kbd>T</kbd>
+      </button>
+      <button class="voce" data-voce="VOCE">
+        <span class="voce-dot"></span>
+        <span class="voce-name">VOCE</span>
+        <kbd>Y</kbd>
+      </button>
+    </aside>
+
+    <footer class="hud hud-bottom">
+      <span class="hud-cell" id="hud-ritus">RITUS &middot; MATUTINUM</span>
+      <span class="hud-cell" id="hud-bpm">170 BPM</span>
+      <span class="hud-cell" id="hud-tenebrae">TENEBRAE &middot; 0.18</span>
+    </footer>
+
+    <nav class="legend">
+      <span><kbd>SPAZIO</kbd> rito</span>
+      <span><kbd>1</kbd>&ndash;<kbd>4</kbd> RITUS</span>
+      <span><kbd>&uarr;</kbd><kbd>&darr;</kbd> BPM</span>
+      <span><kbd>Q</kbd>&ndash;<kbd>Y</kbd> voci</span>
+      <span>mouse Y &middot; TENEBRAE</span>
+    </nav>
+
+    <div id="vignette" aria-hidden="true"></div>
+
+    <div id="boot" role="dialog" aria-label="ingresso">
       <div class="boot-frame">
         <p class="boot-eyebrow">OFFICIUM &middot; MMXXVI</p>
         <h1 class="boot-title">una macchina<br>da liturgia<br>industriale</h1>
         <p class="boot-line">premi <kbd>SPAZIO</kbd> per cominciare</p>
       </div>
     </div>
+
   </main>
   <script src="app.js" defer></script>
 </body>
