@@ -45,6 +45,18 @@ body {
   gap: 1.2rem;
 }
 
+/* ----- fade-in al risveglio ----- */
+.hud, .voci, .legend, .rota-wrap {
+  opacity: 0;
+  transition: opacity 1100ms ease 200ms;
+}
+.is-awakened .hud,
+.is-awakened .voci,
+.is-awakened .legend,
+.is-awakened .rota-wrap {
+  opacity: 1;
+}
+
 /* ----- HUD ----- */
 .hud {
   display: flex;
@@ -244,11 +256,22 @@ kbd {
 
 /* ----- responsive ----- */
 @media (max-width: 720px) {
-  #stage { padding: 1rem 1rem 0.8rem; }
-  .voci {
-    right: 0.8rem;
-    gap: 0.3rem;
+  #stage {
+    padding: 0.8rem 0.8rem 0.6rem;
+    grid-template-rows: auto 1fr auto auto auto;
+    gap: 0.6rem;
   }
+  .voci {
+    position: static;
+    transform: none;
+    grid-row: 3;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.35rem;
+  }
+  .hud-bottom { grid-row: 4; flex-wrap: wrap; gap: 0.8rem 1.4rem; }
+  .legend { grid-row: 5; }
   .voce {
     min-width: 0;
     padding: 0.4rem 0.55rem;
@@ -258,6 +281,6 @@ kbd {
   .voce kbd { display: none; }
   .voce-dot { width: 6px; height: 6px; }
   .hud { font-size: 9px; letter-spacing: 0.2em; }
-  .legend { gap: 0.6rem 1rem; font-size: 9px; }
-  #rota { width: min(94vw, 60vh); height: min(94vw, 60vh); }
+  .legend { gap: 0.5rem 1rem; font-size: 9px; }
+  #rota { width: min(86vw, 56vh); height: min(86vw, 56vh); }
 }

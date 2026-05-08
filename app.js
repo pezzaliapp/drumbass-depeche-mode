@@ -572,6 +572,7 @@
     initAudio();
     if (audioReady() && ctx.state === "suspended") ctx.resume();
     applyRitus(state.ritus);
+    document.documentElement.classList.add("is-awakened");
     boot.style.transition = "opacity 700ms ease";
     boot.style.opacity = "0";
     setTimeout(() => boot.remove(), 750);
@@ -677,7 +678,9 @@
     ["VENTUS",  "vento"],
   ];
   let wordIdx = 0;
-  let lastWordBar = -1;
+  // Inizio a 0 (non -1) perche' "LUX" e' gia' al centro: lascio che resti
+  // per le prime quattro battute, poi parte il ciclo.
+  let lastWordBar = 0;
   const WORD_PERIOD = 4; // ogni 4 battute
 
   function setWord(latin, italian) {
@@ -769,8 +772,9 @@
     cctx.lineTo(cx + R * 0.78, cy);
     cctx.stroke();
 
-    // anello esterno tenue
-    cctx.strokeStyle = "rgba(232, 230, 225, 0.07)";
+    // anello esterno: tenue, ma colorato dal TENEBRAE
+    const t = state.tenebrae;
+    cctx.strokeStyle = `rgba(${230 - 80 * t}, ${230 - 180 * t}, ${225 - 200 * t}, ${0.07 + 0.06 * t})`;
     cctx.lineWidth = 1 * dpr;
     cctx.beginPath();
     cctx.arc(cx, cy, R, 0, Math.PI * 2);
@@ -897,10 +901,13 @@
     cctx.arc(cx + Math.cos(pa) * R, cy + Math.sin(pa) * R, 3.2 * dpr, 0, Math.PI * 2);
     cctx.fill();
 
-    // centro: punto di luce
-    cctx.fillStyle = "rgba(232, 230, 225, 0.9)";
+    // centro: piccolo respiro perpetuo (anche da fermo)
+    const breathT = (typeof performance !== "undefined" ? performance.now() : Date.now()) / 1000;
+    const breath = 0.5 + 0.5 * Math.sin(breathT * Math.PI / 2.4); // ~2.4s di periodo
+    const breathR = (1.6 + breath * 1.4) * dpr;
+    cctx.fillStyle = `rgba(232, 230, 225, ${0.55 + breath * 0.4})`;
     cctx.beginPath();
-    cctx.arc(cx, cy, 1.8 * dpr, 0, Math.PI * 2);
+    cctx.arc(cx, cy, breathR, 0, Math.PI * 2);
     cctx.fill();
   }
 
