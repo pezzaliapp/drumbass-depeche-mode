@@ -2,13 +2,17 @@
 // =========================================================================
 // Una macchina da liturgia industriale.
 //
-// Il file e' diviso in sezioni:
+// Sezioni:
 //   STATE         lo stato globale dell'applicazione
 //   AUDIO ENGINE  la sintesi e il bus master (Web Audio nativo)
 //   VOICES        le sei voci sintetizzate
-//   BOOT          inizializzazione e tastiera
+//   HARMONY       l'armonia statica (Am/Dm in ciclo lento)
+//   RITUSES       i quattro RITUS con pattern e default
+//   SEQUENCER     scheduler look-ahead a 16 step
+//   TRANSPORT     play/pause, cambio RITUS, BPM, voci
+//   INPUT         tastiera + mouse Y per TENEBRAE
 //
-// Sequencer e visualizzazione vivono in moduli successivi.
+// Visualizzazione (rota) e' nel commit successivo.
 // =========================================================================
 
 (() => {
@@ -18,8 +22,14 @@
 
   const state = {
     started: false,
-    tenebrae: 0.18, // 0 = lux, 1 = tenebrae
+    playing: false,
+    bpm: 170,
+    ritus: "MATUTINUM",
+    tenebrae: 0.18,
     masterGain: 0.9,
+    voices: { KICK: true, PERC: true, BASSO: true, FERRUM: false, CAMPANA: true, VOCE: false },
+    currentStep: 0,
+    bar: 0,
   };
 
   // === AUDIO ENGINE ======================================================
@@ -27,20 +37,14 @@
   /** @type {AudioContext|null} */
   let ctx = null;
 
-  // Bus
   let voiceBus = null;
   let dryBus = null;
-  let wetBus = null;
   let wetGain = null;
   let masterLP = null;
   let master = null;
-
-  // Reusable noise buffer
   let noiseBuffer = null;
 
-  function audioReady() {
-    return ctx !== null && ctx.state !== "closed";
-  }
+  function audioReady() { return ctx !== null && ctx.state !== "closed"; }
 
   function initAudio() {
     if (ctx) return;
@@ -51,16 +55,13 @@
     }
     ctx = new Ctor({ latencyHint: "interactive" });
 
-    // Voice bus: tutto cio' che le voci producono passa di qui.
     voiceBus = ctx.createGain();
     voiceBus.gain.value = 1.0;
 
-    // --- Dry path ---
     dryBus = ctx.createGain();
     dryBus.gain.value = 0.88;
     voiceBus.connect(dryBus);
 
-    // --- Wet path: distorsione + riverbero ---
     const wetIn = ctx.createGain();
     wetIn.gain.value = 0.55;
     voiceBus.connect(wetIn);
@@ -77,27 +78,24 @@
     reverb.buffer = makeImpulseResponse(3.6, 2.4);
 
     wetGain = ctx.createGain();
-    wetGain.gain.value = 0.0; // pilotato da TENEBRAE
+    wetGain.gain.value = 0.0;
 
     wetIn.connect(distortion);
     distortion.connect(wetEQ);
     wetEQ.connect(reverb);
     reverb.connect(wetGain);
 
-    // --- Master sum ---
     master = ctx.createGain();
     master.gain.value = state.masterGain;
     dryBus.connect(master);
     wetGain.connect(master);
 
-    // --- Master lowpass: chiude le alte come TENEBRAE sale ---
     masterLP = ctx.createBiquadFilter();
     masterLP.type = "lowpass";
     masterLP.frequency.value = 18000;
     masterLP.Q.value = 0.7;
     master.connect(masterLP);
 
-    // --- Compressore di sicurezza ---
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -10;
     comp.knee.value = 8;
@@ -105,7 +103,6 @@
     comp.attack.value = 0.005;
     comp.release.value = 0.12;
     masterLP.connect(comp);
-
     comp.connect(ctx.destination);
 
     applyTenebrae();
@@ -115,9 +112,7 @@
     if (!audioReady()) return;
     const t = state.tenebrae;
     const now = ctx.currentTime;
-    // wet 0 -> 0.65
     wetGain.gain.setTargetAtTime(t * 0.65, now, 0.04);
-    // master lowpass: 18000 Hz a t=0, 500 Hz a t=1 (logaritmico)
     const cutoff = 18000 / Math.pow(36, t);
     masterLP.frequency.setTargetAtTime(cutoff, now, 0.04);
   }
@@ -126,8 +121,6 @@
     state.tenebrae = Math.max(0, Math.min(1, t));
     applyTenebrae();
   }
-
-  // ---- Helpers ----------------------------------------------------------
 
   function getNoiseBuffer() {
     if (noiseBuffer) return noiseBuffer;
@@ -165,7 +158,6 @@
       const data = ir.getChannelData(ch);
       for (let i = 0; i < length; i++) {
         const t = i / length;
-        // rumore con coda esponenziale e leggero filtro 1-pole verso le alte
         let n = Math.random() * 2 - 1;
         if (i > 0) n = n * 0.7 + data[i - 1] * 0.3;
         data[i] = n * Math.pow(1 - t, decay);
@@ -175,11 +167,7 @@
   }
 
   // === VOICES ============================================================
-  // Ogni voce e' una funzione che, dato un istante AudioContext.time,
-  // istanzia oscillatori/buffer effimeri che si auto-distruggono.
-  // Tutte scrivono su voiceBus.
 
-  // ---- Kick: sub 808 industriale con click ----
   function vKick(time, accent = 1) {
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
@@ -193,7 +181,6 @@
     osc.start(time);
     osc.stop(time + 0.4);
 
-    // click metallico in cima
     const click = ctx.createOscillator();
     const cg = ctx.createGain();
     click.type = "square";
@@ -205,9 +192,7 @@
     click.stop(time + 0.012);
   }
 
-  // ---- Snare: corpo + rumore filtrato ----
   function vSnare(time, accent = 1) {
-    // corpo
     const o = ctx.createOscillator();
     const og = ctx.createGain();
     o.type = "triangle";
@@ -219,7 +204,6 @@
     o.start(time);
     o.stop(time + 0.16);
 
-    // rumore: snap
     const n = noiseSource();
     const bp = ctx.createBiquadFilter();
     bp.type = "bandpass";
@@ -233,7 +217,6 @@
     n.stop(time + 0.2);
   }
 
-  // ---- Hat: closed/open ----
   function vHat(time, open = false, accent = 1) {
     const n = noiseSource();
     const hp = ctx.createBiquadFilter();
@@ -253,7 +236,6 @@
     n.stop(time + dur + 0.02);
   }
 
-  // ---- Ferrum: percussione metallica inarmonica ----
   function vFerrum(time, accent = 1) {
     const partials = [383, 752, 1163, 1735, 2197];
     const out = ctx.createGain();
@@ -271,7 +253,6 @@
       o.start(time);
       o.stop(time + dur + 0.02);
     });
-    // transient
     const n = noiseSource();
     const bp = ctx.createBiquadFilter();
     bp.type = "bandpass";
@@ -285,9 +266,7 @@
     n.stop(time + 0.06);
   }
 
-  // ---- Basso: sub puro + reese detunato un'ottava sopra ----
   function vBasso(time, freq, dur) {
-    // sub
     const sub = ctx.createOscillator();
     const sg = ctx.createGain();
     sub.type = "sine";
@@ -300,9 +279,7 @@
     sub.start(time);
     sub.stop(time + dur + 0.05);
 
-    // reese: due seghe detunate, ottava sopra, lp risonante
-    const detunings = [-9, 9];
-    detunings.forEach((det) => {
+    [-9, 9].forEach((det) => {
       const saw = ctx.createOscillator();
       saw.type = "sawtooth";
       saw.frequency.value = freq * 2;
@@ -322,7 +299,6 @@
     });
   }
 
-  // ---- Campana: accordo additivo con armoniche inarmoniche ----
   function vCampana(time, freqs, dur) {
     const ratios = [1, 2.001, 3.012, 4.99];
     freqs.forEach((f) => {
@@ -343,7 +319,6 @@
     });
   }
 
-  // ---- Voce: coro con formanti (vocale "ah") ----
   function vVoce(time, freqs, dur) {
     const formants = [
       { f: 700, q: 9, gain: 1.0 },
@@ -354,7 +329,6 @@
       const saw = ctx.createOscillator();
       saw.type = "sawtooth";
       saw.frequency.value = f;
-      // micro-vibrato sui voci superiori
       if (idx > 0) {
         const lfo = ctx.createOscillator();
         const lfoGain = ctx.createGain();
@@ -386,6 +360,195 @@
     });
   }
 
+  // === HARMONY ===========================================================
+  // L'armonia ruota lenta. Quattro bar in A minor, quattro in D minor,
+  // poi si ripete. Il sub bass segue, l'accordo della campana segue,
+  // la voce abita la stanza piu' larga.
+
+  const HARMONIES = {
+    AM: { sub: 55, chord: [220, 261.63, 329.63], voce: [220, 329.63] },
+    DM: { sub: 73.42, chord: [146.83, 174.61, 220], voce: [146.83, 220] },
+  };
+
+  // Ciclo da 8 bar: 4 Am, 4 Dm. Lentissimo, monastico.
+  const HARMONY_CYCLE = ["AM", "AM", "AM", "AM", "DM", "DM", "DM", "DM"];
+
+  function currentHarmony() {
+    return HARMONIES[HARMONY_CYCLE[state.bar % HARMONY_CYCLE.length]];
+  }
+
+  // === RITUSES ===========================================================
+  // Ogni RITUS e' una piccola "ora" liturgica: BPM, pattern, voci attive.
+  // I pattern KICK/PERC/FERRUM sono array da 16 step. PERC ha grammatica
+  // propria: 0=silenzio, 1=hat chiuso, 2=hat aperto, 3=rullante,
+  // 4=ghost (rullante quieto). KICK e FERRUM: 0/1.
+
+  const RITUSES = {
+    MATUTINUM: {
+      bpm: 170,
+      patterns: {
+        KICK:   [1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0],
+        PERC:   [0,0,1,0,3,0,1,1,2,0,1,0,3,0,1,1],
+        FERRUM: [0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0],
+      },
+      voicesOn: ["KICK", "PERC", "BASSO", "CAMPANA"],
+      tenebrae: 0.18,
+    },
+    LAUDES: {
+      bpm: 174,
+      patterns: {
+        KICK:   [1,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0],
+        PERC:   [0,1,1,0,3,1,1,1,2,1,1,1,3,1,2,1],
+        FERRUM: [0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,1],
+      },
+      voicesOn: ["KICK", "PERC", "BASSO", "FERRUM"],
+      tenebrae: 0.32,
+    },
+    VESPERAE: {
+      bpm: 160,
+      patterns: {
+        KICK:   [1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
+        PERC:   [0,0,1,0,3,0,0,0,1,0,0,0,3,0,0,4],
+        FERRUM: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      },
+      voicesOn: ["KICK", "PERC", "BASSO", "CAMPANA", "VOCE"],
+      tenebrae: 0.46,
+    },
+    NOX: {
+      bpm: 178,
+      patterns: {
+        KICK:   [1,0,1,0,0,1,1,0,1,0,1,0,0,1,1,0],
+        PERC:   [3,1,2,1,3,1,1,2,3,1,2,1,3,1,1,2],
+        FERRUM: [1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1],
+      },
+      voicesOn: ["KICK", "PERC", "BASSO", "FERRUM", "CAMPANA", "VOCE"],
+      tenebrae: 0.72,
+    },
+  };
+
+  function applyRitus(name) {
+    if (!RITUSES[name]) return;
+    state.ritus = name;
+    const r = RITUSES[name];
+    state.bpm = r.bpm;
+    for (const v of Object.keys(state.voices)) {
+      state.voices[v] = r.voicesOn.includes(v);
+    }
+    // tenebrae: il livello del RITUS e' un suggerimento, non scavalca
+    // l'utente che ha gia' mosso il mouse. Il prossimo mousemove lo
+    // sostituira'. Imposto solo se non e' ancora stato toccato.
+    if (!state.tenebraeTouched) setTenebrae(r.tenebrae);
+  }
+
+  // === SEQUENCER =========================================================
+
+  const LOOKAHEAD_MS = 25;
+  const SCHEDULE_AHEAD_S = 0.10;
+  const STEPS_PER_BAR = 16;
+
+  let nextStepTime = 0;
+  let schedulerHandle = null;
+
+  function stepDuration() {
+    return 60 / state.bpm / 4; // sedicesimi
+  }
+
+  function scheduleStep(step, time) {
+    const ritus = RITUSES[state.ritus];
+    const v = state.voices;
+    const harmony = currentHarmony();
+    const sd = stepDuration();
+
+    if (v.KICK) {
+      const k = ritus.patterns.KICK[step];
+      if (k > 0) vKick(time, k === 2 ? 1.18 : 1.0);
+    }
+
+    if (v.PERC) {
+      const p = ritus.patterns.PERC[step];
+      if (p === 1) vHat(time, false, 1.0);
+      else if (p === 2) vHat(time, true, 0.9);
+      else if (p === 3) vSnare(time, 1.0);
+      else if (p === 4) vSnare(time, 0.5);
+    }
+
+    if (v.FERRUM) {
+      const f = ritus.patterns.FERRUM[step];
+      if (f > 0) vFerrum(time, f === 2 ? 1.15 : 0.85);
+    }
+
+    // Voci sostenute: scattano sul battere della battuta.
+    if (step === 0) {
+      if (v.BASSO) {
+        vBasso(time, harmony.sub, STEPS_PER_BAR * sd);
+      }
+      if (v.CAMPANA) {
+        // dura poco piu' di una battuta per code che si sovrappongono
+        vCampana(time, harmony.chord, STEPS_PER_BAR * sd * 1.25);
+      }
+      if (v.VOCE && state.bar % 2 === 0) {
+        // la voce respira piu' lenta: ogni due battute
+        vVoce(time, harmony.voce, STEPS_PER_BAR * 2 * sd);
+      }
+    }
+  }
+
+  function advanceStep() {
+    nextStepTime += stepDuration();
+    state.currentStep = (state.currentStep + 1) % STEPS_PER_BAR;
+    if (state.currentStep === 0) state.bar = (state.bar + 1) % 1024;
+  }
+
+  function schedulerTick() {
+    if (!audioReady() || !state.playing) return;
+    while (nextStepTime < ctx.currentTime + SCHEDULE_AHEAD_S) {
+      scheduleStep(state.currentStep, nextStepTime);
+      advanceStep();
+    }
+  }
+
+  // === TRANSPORT =========================================================
+
+  function play() {
+    if (!audioReady()) initAudio();
+    if (ctx.state === "suspended") ctx.resume();
+    if (!state.playing) {
+      // riaggancio il clock: il prossimo step parte fra una manciata di ms.
+      // currentStep e bar rimangono dove erano (continuita' attraverso il pause).
+      nextStepTime = ctx.currentTime + 0.05;
+      state.playing = true;
+    }
+    if (schedulerHandle === null) {
+      schedulerHandle = setInterval(schedulerTick, LOOKAHEAD_MS);
+    }
+  }
+
+  function pause() {
+    state.playing = false;
+    if (schedulerHandle !== null) {
+      clearInterval(schedulerHandle);
+      schedulerHandle = null;
+    }
+  }
+
+  function togglePlay() {
+    if (state.playing) pause();
+    else play();
+  }
+
+  function setRitus(name) {
+    applyRitus(name);
+  }
+
+  function setBpm(bpm) {
+    state.bpm = Math.max(60, Math.min(220, Math.round(bpm)));
+  }
+
+  function toggleVoice(name) {
+    if (!(name in state.voices)) return;
+    state.voices[name] = !state.voices[name];
+  }
+
   // === BOOT ==============================================================
 
   const boot = document.getElementById("boot");
@@ -395,25 +558,48 @@
     state.started = true;
     initAudio();
     if (audioReady() && ctx.state === "suspended") ctx.resume();
+    applyRitus(state.ritus);
     boot.style.transition = "opacity 700ms ease";
     boot.style.opacity = "0";
     setTimeout(() => boot.remove(), 750);
+    play();
   }
+
+  // === INPUT =============================================================
 
   window.addEventListener("keydown", (ev) => {
     if (ev.code === "Space") {
       ev.preventDefault();
       if (!state.started) awaken();
+      else togglePlay();
+      return;
     }
+    if (!state.started) return;
+    if (ev.code === "Digit1") setRitus("MATUTINUM");
+    else if (ev.code === "Digit2") setRitus("LAUDES");
+    else if (ev.code === "Digit3") setRitus("VESPERAE");
+    else if (ev.code === "Digit4") setRitus("NOX");
+    else if (ev.code === "ArrowUp") { ev.preventDefault(); setBpm(state.bpm + 1); }
+    else if (ev.code === "ArrowDown") { ev.preventDefault(); setBpm(state.bpm - 1); }
+    else if (ev.code === "KeyQ") toggleVoice("KICK");
+    else if (ev.code === "KeyW") toggleVoice("PERC");
+    else if (ev.code === "KeyE") toggleVoice("BASSO");
+    else if (ev.code === "KeyR") toggleVoice("FERRUM");
+    else if (ev.code === "KeyT") toggleVoice("CAMPANA");
+    else if (ev.code === "KeyY") toggleVoice("VOCE");
   });
 
-  // Espongo l'engine all'oggetto window per testing/manuale.
-  // Verra' rimosso quando il sequencer prendera' il controllo.
+  window.addEventListener("mousemove", (ev) => {
+    if (!state.started) return;
+    state.tenebraeTouched = true;
+    setTenebrae(ev.clientY / window.innerHeight);
+  });
+
+  // Esposizione minimale per debug e per il modulo visivo che arrivera'.
   window.OFFICIUM = {
     state,
     get ctx() { return ctx; },
-    get voiceBus() { return voiceBus; },
-    setTenebrae,
-    voices: { vKick, vSnare, vHat, vFerrum, vBasso, vCampana, vVoce },
+    play, pause, togglePlay, setRitus, setBpm, setTenebrae, toggleVoice,
+    HARMONIES, RITUSES,
   };
 })();
