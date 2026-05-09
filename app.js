@@ -566,16 +566,40 @@
 
   const boot = document.getElementById("boot");
 
+  // Flag effimero (ms) per evitare che pointerdown + click sullo stesso
+  // gesto risveglino e poi annullino l'azione. Vedi gestione play-toggle.
+  let justAwakenedFlag = false;
+
   function awaken() {
     if (state.started) return;
     state.started = true;
+    justAwakenedFlag = true;
+    setTimeout(() => { justAwakenedFlag = false; }, 250);
     initAudio();
-    if (audioReady() && ctx.state === "suspended") ctx.resume();
+    if (audioReady() && ctx.state === "suspended") {
+      // Su iOS l'AudioContext deve essere riacceso esattamente dentro
+      // questo user gesture; in alcuni casi serve un nudge silenzioso.
+      ctx.resume();
+      const silentOsc = ctx.createOscillator();
+      const silentGain = ctx.createGain();
+      silentGain.gain.value = 0.0001;
+      silentOsc.connect(silentGain).connect(ctx.destination);
+      silentOsc.start();
+      silentOsc.stop(ctx.currentTime + 0.02);
+    }
     applyRitus(state.ritus);
     document.documentElement.classList.add("is-awakened");
     boot.style.transition = "opacity 700ms ease";
     boot.style.opacity = "0";
     setTimeout(() => boot.remove(), 750);
+
+    // La guida visiva TENEBRAE resta cinque secondi, poi si dissolve.
+    const hint = document.getElementById("tenebrae-hint");
+    if (hint) {
+      setTimeout(() => hint.classList.add("is-fading"), 5000);
+      setTimeout(() => hint.remove(), 7000);
+    }
+
     play();
   }
 
@@ -605,6 +629,9 @@
 
   window.addEventListener("pointermove", (ev) => {
     if (!state.started) return;
+    // Ignora i tocchi sui controlli: tappare un pulsante a fondo schermo
+    // farebbe altrimenti saltare TENEBRAE al massimo per inerzia.
+    if (ev.target && ev.target.closest && ev.target.closest("button, .toolbar, .legend, .hud")) return;
     state.tenebraeTouched = true;
     setTenebrae(ev.clientY / window.innerHeight);
   });
@@ -628,22 +655,64 @@
   window.addEventListener("resize", resizeCanvas);
 
   // ---- elementi HUD/parola ----
-  const hudBpm     = document.getElementById("hud-bpm");
   const hudRitus   = document.getElementById("hud-ritus");
   const hudTen     = document.getElementById("hud-tenebrae");
   const wordEl     = document.getElementById("word");
   const wordTrans  = document.getElementById("word-trans");
+  const tbBpmValue = document.getElementById("tb-bpm-value");
+  const playBtn    = document.getElementById("play-toggle");
 
-  // ---- voci: pulsanti cliccabili ----
-  /** @type {Object<string, HTMLButtonElement>} */
-  const voceButtons = {};
-  document.querySelectorAll(".voce").forEach((btn) => {
-    const v = btn.dataset.voce;
-    voceButtons[v] = btn;
+  // Helper: ogni interazione utente passa di qui per assicurare il
+  // risveglio (importante su iPhone: il primo tap deve sbloccare
+  // l'AudioContext entro lo stesso user gesture).
+  function ensureAwake() {
+    if (!state.started) { awaken(); return true; }
+    return false;
+  }
+
+  // ---- play / pause centrale ----
+  playBtn.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    if (!state.started) { awaken(); return; }
+    // pointerdown (capture) potrebbe aver appena risvegliato: il click che
+    // segue non deve immediatamente rimettere in pausa il rito appena nato.
+    if (justAwakenedFlag) return;
+    togglePlay();
+    playBtn.blur();
+  });
+
+  // ---- toolbar: RITUS ----
+  /** @type {NodeListOf<HTMLButtonElement>} */
+  const ritusButtons = document.querySelectorAll(".tb-ritus");
+  ritusButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
-      if (!state.started) { awaken(); return; }
+      ensureAwake();
+      setRitus(btn.dataset.ritus);
+      btn.blur();
+    });
+  });
+
+  // ---- toolbar: BPM ----
+  document.querySelectorAll(".tb-bpm").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      ensureAwake();
+      const delta = parseInt(btn.dataset.bpm, 10) || 0;
+      setBpm(state.bpm + delta);
+      btn.blur();
+    });
+  });
+
+  // ---- toolbar: voci ----
+  /** @type {Object<string, HTMLButtonElement[]>} */
+  const voceButtons = { KICK:[], PERC:[], BASSO:[], FERRUM:[], CAMPANA:[], VOCE:[] };
+  document.querySelectorAll(".tb-voce").forEach((btn) => {
+    const v = btn.dataset.voce;
+    if (!voceButtons[v]) return;
+    voceButtons[v].push(btn);
+    btn.addEventListener("click", () => {
+      ensureAwake();
       toggleVoice(v);
-      btn.blur(); // evita che SPACE riattivi il bottone
+      btn.blur();
     });
   });
 
@@ -708,20 +777,27 @@
   }
 
   // ---- HUD sync ----
-  let hudPrev = { bpm: -1, ritus: "", ten: -1 };
+  let hudPrev = { bpm: -1, ritus: "", ten: -1, playing: null };
   function syncHUD() {
     if (state.bpm !== hudPrev.bpm) {
-      hudBpm.textContent = `${state.bpm} BPM`;
+      tbBpmValue.textContent = String(state.bpm);
       hudPrev.bpm = state.bpm;
     }
     if (state.ritus !== hudPrev.ritus) {
       hudRitus.textContent = `RITUS · ${state.ritus}`;
+      ritusButtons.forEach((btn) => {
+        btn.classList.toggle("is-active", btn.dataset.ritus === state.ritus);
+      });
       hudPrev.ritus = state.ritus;
     }
     const tRound = Math.round(state.tenebrae * 100) / 100;
     if (tRound !== hudPrev.ten) {
       hudTen.textContent = `TENEBRAE · ${tRound.toFixed(2)}`;
       hudPrev.ten = tRound;
+    }
+    if (state.playing !== hudPrev.playing) {
+      playBtn.classList.toggle("is-playing", !!state.playing);
+      hudPrev.playing = state.playing;
     }
     document.documentElement.style.setProperty("--vignette", state.tenebrae.toFixed(3));
   }
@@ -741,11 +817,12 @@
       }
     }
     for (const k of Object.keys(voceButtons)) {
-      const btn = voceButtons[k];
       const active = !!state.voices[k];
       const firing = active && now < voceLitUntil[k];
-      btn.classList.toggle("is-active", active);
-      btn.classList.toggle("is-firing", firing);
+      for (const btn of voceButtons[k]) {
+        btn.classList.toggle("is-active", active);
+        btn.classList.toggle("is-firing", firing);
+      }
     }
   }
 

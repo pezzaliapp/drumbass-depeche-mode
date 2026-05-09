@@ -17,6 +17,12 @@ html, body { width: 100%; height: 100%; }
   --vignette: 0;             /* pilotato da JS via TENEBRAE */
 }
 
+html, body {
+  /* iOS: blocca rubber-band e zoom non voluti durante lo swipe */
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
 body {
   background: var(--bg);
   color: var(--ink);
@@ -27,31 +33,33 @@ body {
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* su iPhone X+: lascia respirare le notch */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
-.mono, kbd, .hud-cell, .voce, .legend {
+.mono, kbd, .hud-cell, .legend, .tb-label, .tb-btn, .tb-value {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
 }
 
 /* ----- layout ----- */
 #stage {
   position: relative;
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   display: grid;
   grid-template-rows: auto 1fr auto auto;
   grid-template-columns: 1fr;
-  padding: 1.6rem 2.4rem 1.4rem;
-  gap: 1.2rem;
+  padding: 1.4rem 2.2rem 1.2rem;
+  gap: 1rem;
 }
 
 /* ----- fade-in al risveglio ----- */
-.hud, .voci, .legend, .rota-wrap {
+.hud, .toolbar, .legend, .rota-wrap {
   opacity: 0;
   transition: opacity 1100ms ease 200ms;
 }
 .is-awakened .hud,
-.is-awakened .voci,
+.is-awakened .toolbar,
 .is-awakened .legend,
 .is-awakened .rota-wrap {
   opacity: 1;
@@ -66,16 +74,16 @@ body {
   letter-spacing: 0.28em;
   text-transform: uppercase;
   z-index: 2;
+  gap: 1.2rem;
+  flex-wrap: wrap;
 }
 .hud-top    { grid-row: 1; }
-.hud-bottom { grid-row: 3; gap: 2.2rem; justify-content: center; }
-.hud-cell   { color: var(--ink); }
+.hud-cell   { color: var(--ink); white-space: nowrap; }
 .hud-dim    { color: var(--ink-dim); }
 .hud-mark   { letter-spacing: 0.42em; font-weight: 500; }
-
 #hud-tenebrae { color: var(--ember); }
 
-/* ----- rota: canvas + parola al centro ----- */
+/* ----- rota: canvas + parola al centro + play ----- */
 .rota-wrap {
   grid-row: 2;
   position: relative;
@@ -85,22 +93,34 @@ body {
   height: 100%;
   z-index: 1;
 }
+.rota-frame {
+  position: relative;
+  width: min(72vh, 72vw, 720px);
+  height: min(72vh, 72vw, 720px);
+  max-width: 100%;
+}
 #rota {
   display: block;
-  width: min(78vh, 78vw, 760px);
-  height: min(78vh, 78vw, 760px);
-  max-width: 100%;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
 }
 .rota-center {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   pointer-events: none;
+  /* leggera traslazione verso l'alto per lasciare spazio al play sotto */
+  padding-bottom: 14%;
 }
 #word {
   font-family: "Bebas Neue", sans-serif;
-  font-size: clamp(3.5rem, 9vmin, 7rem);
+  font-size: clamp(3rem, 9vmin, 6.5rem);
   line-height: 0.9;
   letter-spacing: 0.06em;
   color: var(--ink);
@@ -121,70 +141,139 @@ body {
 }
 .word-trans.is-fading { opacity: 0; }
 
-/* ----- voci panel ----- */
-.voci {
+/* ----- play / pause centrale ----- */
+.play-toggle {
   position: absolute;
-  right: 2.4rem;
+  left: 50%;
+  bottom: 14%;
+  transform: translateX(-50%);
+  width: 52px;
+  height: 52px;
+  min-width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 5, 5, 0.55);
+  border: 1px solid var(--ink-mute);
+  color: var(--ink);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: border-color 200ms ease, background 200ms ease, color 200ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.play-toggle:hover,
+.play-toggle:focus-visible {
+  border-color: var(--ink);
+  outline: none;
+}
+.play-toggle:active {
+  background: rgba(217, 38, 38, 0.08);
+}
+.play-toggle svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  display: block;
+}
+.play-toggle .icon-pause { display: none; }
+.play-toggle.is-playing { color: var(--ember); border-color: var(--ember); }
+.play-toggle.is-playing .icon-play { display: none; }
+.play-toggle.is-playing .icon-pause { display: block; }
+
+/* ----- tenebrae hint: piccola guida visiva al primo accesso ----- */
+.t-hint {
+  position: fixed;
+  right: 1.6rem;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  z-index: 3;
-}
-.voce {
-  appearance: none;
-  background: transparent;
-  border: 1px solid var(--ink-mute);
+  align-items: flex-end;
+  gap: 0.6rem;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9px;
+  letter-spacing: 0.3em;
   color: var(--ink-dim);
-  padding: 0.55rem 0.85rem;
-  display: grid;
-  grid-template-columns: 8px 1fr auto;
-  align-items: center;
-  gap: 0.7rem;
-  font-size: 10px;
-  letter-spacing: 0.34em;
-  text-transform: uppercase;
-  cursor: pointer;
-  min-width: 152px;
-  transition: border-color 200ms ease, color 200ms ease, background 200ms ease;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1200ms ease;
+  z-index: 5;
 }
-.voce:hover { border-color: var(--ink-dim); color: var(--ink); }
-.voce-dot {
-  display: block;
-  width: 8px;
-  height: 8px;
-  background: var(--ink-mute);
-  border-radius: 50%;
-  transition: background 120ms ease, box-shadow 200ms ease;
-}
-.voce-name {
-  text-align: left;
-  font-weight: 400;
-}
-.voce kbd {
-  border: 1px solid var(--ink-mute);
-  color: var(--ink-dim);
-}
-.voce.is-active {
-  color: var(--ink);
-  border-color: var(--ember);
-}
-.voce.is-active .voce-dot {
-  background: var(--ember);
-}
-.voce.is-active.is-firing .voce-dot {
-  background: var(--glow);
-  box-shadow: 0 0 16px var(--glow);
+.is-awakened .t-hint { opacity: 1; }
+.t-hint.is-fading { opacity: 0; }
+.t-hint-top { color: var(--ink); }
+.t-hint-bot { color: var(--ember); }
+.t-hint-bar {
+  width: 1px;
+  height: 70px;
+  background: linear-gradient(to bottom, rgba(232, 230, 225, 0.6), rgba(154, 27, 27, 0.85));
 }
 
-/* ----- legend (bottom) ----- */
+/* ----- toolbar: controlli sempre visibili ----- */
+.toolbar {
+  grid-row: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.6rem;
+  z-index: 2;
+}
+.tb-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.tb-label {
+  font-size: 9px;
+  letter-spacing: 0.36em;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  margin-right: 0.5rem;
+}
+.tb-btn {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--ink-mute);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 0.4rem;
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.tb-btn:hover { border-color: var(--ink-dim); }
+.tb-btn:focus-visible { outline: none; border-color: var(--ink); }
+.tb-btn:active { background: rgba(217, 38, 38, 0.08); }
+
+.tb-btn.is-active {
+  border-color: var(--ember);
+  color: var(--ember);
+}
+.tb-btn.is-firing {
+  background: rgba(217, 38, 38, 0.18);
+  color: var(--glow);
+  border-color: var(--glow);
+}
+.tb-value {
+  min-width: 44px;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--ink);
+}
+
+/* ----- legend (scorciatoie da tastiera, desktop) ----- */
 .legend {
   grid-row: 4;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 1.2rem 2rem;
+  gap: 0.8rem 1.8rem;
   font-size: 10px;
   letter-spacing: 0.28em;
   text-transform: uppercase;
@@ -228,7 +317,7 @@ kbd {
   background: var(--bg);
   z-index: 100;
 }
-.boot-frame { text-align: left; }
+.boot-frame { text-align: left; padding: 0 1.5rem; }
 .boot-eyebrow {
   font-family: "IBM Plex Mono", monospace;
   font-size: 11px;
@@ -257,30 +346,47 @@ kbd {
 /* ----- responsive ----- */
 @media (max-width: 720px) {
   #stage {
-    padding: 0.8rem 0.8rem 0.6rem;
-    grid-template-rows: auto 1fr auto auto auto;
+    padding: 0.8rem 0.7rem 0.7rem;
     gap: 0.6rem;
   }
-  .voci {
-    position: static;
-    transform: none;
-    grid-row: 3;
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.35rem;
-  }
-  .hud-bottom { grid-row: 4; flex-wrap: wrap; gap: 0.8rem 1.4rem; }
-  .legend { grid-row: 5; }
-  .voce {
-    min-width: 0;
-    padding: 0.4rem 0.55rem;
+  .hud {
     font-size: 9px;
-    grid-template-columns: 6px 1fr;
+    letter-spacing: 0.2em;
+    gap: 0.6rem 1rem;
+    justify-content: center;
   }
-  .voce kbd { display: none; }
-  .voce-dot { width: 6px; height: 6px; }
-  .hud { font-size: 9px; letter-spacing: 0.2em; }
-  .legend { gap: 0.5rem 1rem; font-size: 9px; }
-  #rota { width: min(86vw, 56vh); height: min(86vw, 56vh); }
+  .hud-mark { letter-spacing: 0.32em; }
+  .rota-frame { width: min(88vw, 56vh); height: min(88vw, 56vh); }
+  .toolbar { gap: 0.45rem 0.9rem; }
+  .tb-label { font-size: 8px; letter-spacing: 0.28em; margin-right: 0.3rem; }
+  .tb-btn {
+    font-size: 11px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 0.3rem;
+  }
+  .tb-value { font-size: 11px; min-width: 38px; }
+  .legend {
+    grid-row: 4;
+    gap: 0.4rem 0.9rem;
+    font-size: 8px;
+    letter-spacing: 0.22em;
+  }
+  .legend kbd { font-size: 8px; padding: 0 4px; }
+  .play-toggle {
+    width: 48px;
+    height: 48px;
+    bottom: 12%;
+  }
+  .t-hint {
+    right: 2%;
+    font-size: 8px;
+  }
+  .t-hint-bar { height: 50px; }
+}
+
+/* ----- screen ancora pi&ugrave; stretti: la legenda non serve, la toolbar dice tutto ----- */
+@media (max-width: 480px) {
+  .legend { display: none; }
+  #stage { grid-template-rows: auto 1fr auto; }
 }

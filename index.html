@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>OFFICIUM &middot; drumbass depeche mode</title>
   <meta name="description" content="OFFICIUM. Una macchina da liturgia industriale. Sintesi sottrattiva, ritmica drum &amp; bass, voci di metallo e cattedrale.">
   <meta name="theme-color" content="#050505">
@@ -16,62 +16,71 @@
 
     <header class="hud hud-top">
       <span class="hud-cell hud-mark">OFFICIUM</span>
+      <span class="hud-cell" id="hud-ritus">RITUS &middot; MATUTINUM</span>
+      <span class="hud-cell" id="hud-tenebrae">TENEBRAE &middot; 0.18</span>
       <span class="hud-cell hud-dim" id="hud-clock">MMXXVI</span>
     </header>
 
     <section class="rota-wrap" aria-label="rota">
-      <canvas id="rota" aria-hidden="true"></canvas>
-      <div class="rota-center">
-        <div id="word" data-word="LUX">LUX</div>
-        <div id="word-trans" class="word-trans">luce</div>
+      <div class="rota-frame">
+        <canvas id="rota" aria-hidden="true"></canvas>
+
+        <div class="rota-center">
+          <div id="word" data-word="LUX">LUX</div>
+          <div id="word-trans" class="word-trans">luce</div>
+        </div>
+
+        <button id="play-toggle" class="play-toggle" aria-label="play / pause">
+          <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <polygon points="7,4 7,20 20,12"></polygon>
+          </svg>
+          <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="6" y="4" width="4" height="16"></rect>
+            <rect x="14" y="4" width="4" height="16"></rect>
+          </svg>
+        </button>
+      </div>
+
+      <div id="tenebrae-hint" class="t-hint" aria-hidden="true">
+        <span class="t-hint-top">LUX</span>
+        <span class="t-hint-bar"></span>
+        <span class="t-hint-bot">TENEBRAE</span>
       </div>
     </section>
 
-    <aside class="voci" aria-label="voci">
-      <button class="voce is-active" data-voce="KICK">
-        <span class="voce-dot"></span>
-        <span class="voce-name">KICK</span>
-        <kbd>Q</kbd>
-      </button>
-      <button class="voce is-active" data-voce="PERC">
-        <span class="voce-dot"></span>
-        <span class="voce-name">PERC</span>
-        <kbd>W</kbd>
-      </button>
-      <button class="voce is-active" data-voce="BASSO">
-        <span class="voce-dot"></span>
-        <span class="voce-name">BASSO</span>
-        <kbd>E</kbd>
-      </button>
-      <button class="voce" data-voce="FERRUM">
-        <span class="voce-dot"></span>
-        <span class="voce-name">FERRUM</span>
-        <kbd>R</kbd>
-      </button>
-      <button class="voce is-active" data-voce="CAMPANA">
-        <span class="voce-dot"></span>
-        <span class="voce-name">CAMPANA</span>
-        <kbd>T</kbd>
-      </button>
-      <button class="voce" data-voce="VOCE">
-        <span class="voce-dot"></span>
-        <span class="voce-name">VOCE</span>
-        <kbd>Y</kbd>
-      </button>
-    </aside>
+    <nav class="toolbar" aria-label="controlli">
+      <div class="tb-group tb-group-ritus">
+        <span class="tb-label">RITUS</span>
+        <button class="tb-btn tb-ritus" data-ritus="MATUTINUM"  aria-label="Matutinum">I</button>
+        <button class="tb-btn tb-ritus" data-ritus="LAUDES"     aria-label="Laudes">II</button>
+        <button class="tb-btn tb-ritus" data-ritus="VESPERAE"   aria-label="Vesperae">III</button>
+        <button class="tb-btn tb-ritus" data-ritus="NOX"        aria-label="Nox">IV</button>
+      </div>
 
-    <footer class="hud hud-bottom">
-      <span class="hud-cell" id="hud-ritus">RITUS &middot; MATUTINUM</span>
-      <span class="hud-cell" id="hud-bpm">170 BPM</span>
-      <span class="hud-cell" id="hud-tenebrae">TENEBRAE &middot; 0.18</span>
-    </footer>
+      <div class="tb-group tb-group-bpm">
+        <span class="tb-label">BPM</span>
+        <button class="tb-btn tb-bpm" data-bpm="-1" aria-label="riduci BPM">&minus;</button>
+        <span class="tb-value" id="tb-bpm-value">170</span>
+        <button class="tb-btn tb-bpm" data-bpm="+1" aria-label="aumenta BPM">+</button>
+      </div>
+
+      <div class="tb-group tb-group-voci">
+        <span class="tb-label">VOCI</span>
+        <button class="tb-btn tb-voce" data-voce="KICK"    aria-label="Kick">K</button>
+        <button class="tb-btn tb-voce" data-voce="PERC"    aria-label="Perc">P</button>
+        <button class="tb-btn tb-voce" data-voce="BASSO"   aria-label="Basso">B</button>
+        <button class="tb-btn tb-voce" data-voce="FERRUM"  aria-label="Ferrum">F</button>
+        <button class="tb-btn tb-voce" data-voce="CAMPANA" aria-label="Campana">C</button>
+        <button class="tb-btn tb-voce" data-voce="VOCE"    aria-label="Voce">V</button>
+      </div>
+    </nav>
 
     <nav class="legend">
       <span><kbd>SPAZIO</kbd> rito</span>
       <span><kbd>1</kbd>&ndash;<kbd>4</kbd> RITUS</span>
       <span><kbd>&uarr;</kbd><kbd>&darr;</kbd> BPM</span>
       <span><kbd>Q</kbd>&ndash;<kbd>Y</kbd> voci</span>
-      <span>mouse Y &middot; TENEBRAE</span>
+      <span>mouse Y / swipe &middot; TENEBRAE</span>
     </nav>
 
     <div id="vignette" aria-hidden="true"></div>
@@ -80,7 +89,7 @@
       <div class="boot-frame">
         <p class="boot-eyebrow">OFFICIUM &middot; MMXXVI</p>
         <h1 class="boot-title">una macchina<br>da liturgia<br>industriale</h1>
-        <p class="boot-line">premi <kbd>SPAZIO</kbd> per cominciare</p>
+        <p class="boot-line">premi <kbd>SPAZIO</kbd> o tocca lo schermo</p>
       </div>
     </div>
 

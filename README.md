@@ -38,6 +38,8 @@ l'HUD). Niente immagini.
 
 ## Come si usa
 
+### Da tastiera (desktop)
+
 Premi **SPAZIO** per cominciare. Da quel momento l'officio gira.
 - **1 2 3 4** scegli il RITUS.
 - **&uarr; &darr;** alza e abbassa il BPM di un'unit&agrave;.
@@ -46,8 +48,29 @@ Premi **SPAZIO** per cominciare. Da quel momento l'officio gira.
 - **mouse Y** controlla TENEBRAE: in alto pulito, in basso saturo.
 - **SPAZIO** di nuovo &rarr; pause / resume.
 
-Su touch: tappa per cominciare, tappa i pulsanti delle voci per
-attivarle, scorri verticalmente per pilotare TENEBRAE.
+### Su touch (iPhone, iPad, Android)
+
+Le scorciatoie da tastiera non esistono qui, e va bene cos&igrave;. Tutto
+&egrave; sotto il dito.
+
+- **Tocca lo schermo** o il pulsante centrale (triangolo) per
+  cominciare. Il centro della rota ospita il play / pause: triangolo
+  per partire, due barre per fermare.
+- **Toolbar in basso**: i quattro RITUS (I II III IV in numeri
+  romani), i due pulsanti BPM (&minus; / +) col valore corrente al
+  centro, e le sei iniziali delle voci (K P B F C V) per accendere
+  e spegnere ciascuna.
+- **Swipe verticale ovunque** sullo schermo &rarr; TENEBRAE. Trascini in
+  basso e il rito si fa scuro, trascini verso l'alto e torna lucido.
+  Una piccola guida visiva sul bordo destro suggerisce il gesto nei
+  primi cinque secondi e poi sparisce.
+- I pulsanti hanno tap target da 44pt come da linee guida iOS.
+  Tappare un controllo non muove TENEBRAE, anche se il dito sosta
+  in basso.
+
+Le scorciatoie da tastiera continuano a funzionare anche su tablet
+con tastiera Bluetooth. I controlli touch sono in aggiunta, non in
+sostituzione.
 
 ## Anatomia
 
